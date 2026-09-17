@@ -413,6 +413,13 @@ class TestConfigVRRP(object):
             assert mock_run_command.call_count == 1
             assert ('Ethernet60', '9.9.9.1/24') not in db.cfgdb.get_table('INTERFACE')
 
+        # config int vrrp remove Ethernet68 7
+        result = runner.invoke(config.config.commands["interface"].commands["vrrp"].commands["remove"],
+                               ["Ethernet68", "7"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Ethernet68', '7') not in db.cfgdb.get_table('VRRP')
+
         # config int ip remove Ethernet68 8.8.8.1/24
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
@@ -621,6 +628,13 @@ class TestConfigVRRP(object):
             assert result.exit_code == 0
             assert mock_run_command.call_count == 1
             assert ('Ethernet60', '99::1/64') not in db.cfgdb.get_table('INTERFACE')
+
+        # config int vrrp6 remove Ethernet68 7
+        result = runner.invoke(config.config.commands["interface"].commands["vrrp6"].commands["remove"],
+                               ["Ethernet68", "7"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Ethernet68', '7') not in db.cfgdb.get_table('VRRP6')
 
         # config int ip remove Ethernet68 88::1/64
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
@@ -1413,6 +1427,213 @@ class TestConfigVRRP(object):
             assert result.exit_code == 0
             assert mock_run_command.call_count == 1
             assert ('Ethernet64', '10::8/64') not in db.cfgdb.get_table('INTERFACE')
+
+    def test_remove_ipv4_blocked_when_vrrp_vip_in_subnet(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        # config int ip add Ethernet64 10.10.10.1/24
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
+                               ["Ethernet64", "10.10.10.1/24"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Ethernet64', '10.10.10.1/24') in db.cfgdb.get_table('INTERFACE')
+
+        # config int vrrp ip add Ethernet64 8 10.10.10.8
+        result = runner.invoke(config.config.commands["interface"].commands["vrrp"].commands["ip"].commands["add"],
+                               ["Ethernet64", "8", "10.10.10.8"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Ethernet64', '8') in db.cfgdb.get_table('VRRP')
+
+        # config int ip remove Ethernet64 10.10.10.1/24
+        # blocked: VRRP VIP 10.10.10.8 falls inside 10.10.10.0/24
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                               ["Ethernet64", "10.10.10.1/24"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+        assert "Cannot remove IP 10.10.10.1/24 from interface Ethernet64" in result.output
+        assert "VRRP VIP 10.10.10.8 (instance 8) still falls inside this subnet" in result.output
+        assert "VRRP6" not in result.output
+        assert ('Ethernet64', '10.10.10.1/24') in db.cfgdb.get_table('INTERFACE')
+
+        # config int vrrp remove Ethernet64 8
+        result = runner.invoke(config.config.commands["interface"].commands["vrrp"].commands["remove"],
+                               ["Ethernet64", "8"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Ethernet64', '8') not in db.cfgdb.get_table('VRRP')
+
+        # config int ip remove Ethernet64 10.10.10.1/24
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Ethernet64", "10.10.10.1/24"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet64', '10.10.10.1/24') not in db.cfgdb.get_table('INTERFACE')
+
+    def test_remove_ipv6_blocked_when_vrrp6_vip_in_subnet(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        # config int ip add Ethernet64 10::8/64
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
+                               ["Ethernet64", "10::8/64"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Ethernet64', '10::8/64') in db.cfgdb.get_table('INTERFACE')
+
+        # config int vrrp6 ipv6 add Ethernet64 8 10::1
+        result = runner.invoke(config.config.commands["interface"].commands["vrrp6"].commands["ipv6"].commands["add"],
+                               ["Ethernet64", "8", "10::1"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Ethernet64', '8') in db.cfgdb.get_table('VRRP6')
+
+        # config int ip remove Ethernet64 10::8/64
+        # blocked: VRRP6 VIP 10::1 falls inside 10::/64
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                               ["Ethernet64", "10::8/64"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+        assert "Cannot remove IP 10::8/64 from interface Ethernet64" in result.output
+        assert "VRRP6 VIP 10::1 (instance 8) still falls inside this subnet" in result.output
+        assert ('Ethernet64', '10::8/64') in db.cfgdb.get_table('INTERFACE')
+
+        # config int vrrp6 remove Ethernet64 8
+        result = runner.invoke(config.config.commands["interface"].commands["vrrp6"].commands["remove"],
+                               ["Ethernet64", "8"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Ethernet64', '8') not in db.cfgdb.get_table('VRRP6')
+
+        # config int ip remove Ethernet64 10::8/64
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Ethernet64", "10::8/64"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet64', '10::8/64') not in db.cfgdb.get_table('INTERFACE')
+
+    def test_remove_ip_blocked_dual_stack_when_vrrp6_vip_in_subnet(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        # Dual-stack: v4 remains on the interface, so this is not "the last IP",
+        # but removing the v6 prefix must still be blocked because the VRRP6 VIP
+        # falls inside that subnet.
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
+                               ["Ethernet64", "1.0.0.1/24"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
+                               ["Ethernet64", "1::1/64"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        result = runner.invoke(config.config.commands["interface"].commands["vrrp6"].commands["ipv6"].commands["add"],
+                               ["Ethernet64", "2", "1::10"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Ethernet64', '2') in db.cfgdb.get_table('VRRP6')
+
+        # Removing the v4 address is allowed: the VRRP6 VIP is not in 1.0.0.0/24.
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Ethernet64", "1.0.0.1/24"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet64', '1.0.0.1/24') not in db.cfgdb.get_table('INTERFACE')
+
+        # Re-add v4 so the interface is dual-stack again, then try to remove v6.
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
+                               ["Ethernet64", "1.0.0.1/24"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                               ["Ethernet64", "1::1/64"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+        assert "Cannot remove IP 1::1/64 from interface Ethernet64" in result.output
+        assert "VRRP6 VIP 1::10 (instance 2) still falls inside this subnet" in result.output
+        assert ('Ethernet64', '1::1/64') in db.cfgdb.get_table('INTERFACE')
+        assert ('Ethernet64', '1.0.0.1/24') in db.cfgdb.get_table('INTERFACE')
+
+        result = runner.invoke(config.config.commands["interface"].commands["vrrp6"].commands["remove"],
+                               ["Ethernet64", "2"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Ethernet64", "1::1/64"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet64', '1::1/64') not in db.cfgdb.get_table('INTERFACE')
+
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Ethernet64", "1.0.0.1/24"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+
+    def test_remove_ip_allowed_when_vrrp_vip_not_in_subnet(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        # Two v4 prefixes on the same interface; VIP lives only in 10.10.10.0/24.
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
+                               ["Ethernet64", "10.10.10.1/24"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
+                               ["Ethernet64", "20.20.20.1/24"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        result = runner.invoke(config.config.commands["interface"].commands["vrrp"].commands["ip"].commands["add"],
+                               ["Ethernet64", "8", "10.10.10.8"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        # Removing the unrelated subnet is allowed.
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Ethernet64", "20.20.20.1/24"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet64', '20.20.20.1/24') not in db.cfgdb.get_table('INTERFACE')
+
+        # Removing the covering subnet is blocked.
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                               ["Ethernet64", "10.10.10.1/24"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+        assert "VRRP VIP 10.10.10.8 (instance 8) still falls inside this subnet" in result.output
+        assert ('Ethernet64', '10.10.10.1/24') in db.cfgdb.get_table('INTERFACE')
+
+        result = runner.invoke(config.config.commands["interface"].commands["vrrp"].commands["remove"],
+                               ["Ethernet64", "8"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Ethernet64", "10.10.10.1/24"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
 
     def test_config_vrrp_instance_priority(self):
         db = Db()

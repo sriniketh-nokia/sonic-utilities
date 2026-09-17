@@ -6375,6 +6375,15 @@ def remove(ctx, interface_name, ip_addr):
     if table_name == "":
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
     interface_addresses = get_interface_ipaddresses(config_db, interface_name)
+    if ip_address in interface_addresses:
+        affected_vips = get_vrrp_vips_in_subnet(config_db, interface_name, ip_address)
+        if affected_vips:
+            details = ", ".join(
+                "{} VIP {} (VR Id: {})".format(protocol, vip, vrid)
+                for protocol, vrid, vip in affected_vips)
+            ctx.fail(
+                "Cannot remove IP {} from interface {}. {} still fall{} inside this subnet."
+                .format(ip_address, interface_name, details, "s" if len(affected_vips) == 1 else ""))
     # If we deleting the last IP entry of the interface, check whether a static route present for the RIF
     # before deleting the entry and also the RIF.
     if interface_addresses == {ip_address}:
@@ -8046,6 +8055,55 @@ def check_vip_parent_subnet(config_db, vip, interface_name):
             return True
 
     return False
+
+
+def get_vrrp_vip_list(vrrp_entry):
+    vips = []
+    for vip_key in ("vip", "vip@"):
+        if vip_key not in vrrp_entry:
+            continue
+        value = vrrp_entry[vip_key]
+        vip_values = value if isinstance(value, list) else str(value).split(",")
+        for vip in vip_values:
+            vip_str = str(vip).strip()
+            if not vip_str:
+                continue
+            if "/" in vip_str:
+                try:
+                    vip_str = str(ipaddress.ip_interface(vip_str).ip)
+                except ValueError:
+                    continue
+            vips.append(vip_str)
+        break
+    return vips
+
+
+def get_vrrp_vips_in_subnet(config_db, interface_name, ip_to_remove):
+    vrrp_table = "VRRP" if ip_to_remove.version == 4 else "VRRP6"
+    remaining_prefixes = [
+        addr for addr in get_interface_ipaddresses(config_db, interface_name)
+        if addr.version == ip_to_remove.version and addr != ip_to_remove
+    ]
+
+    impacted_vips = []
+    for vrrp_key in config_db.get_keys(vrrp_table):
+        if not (isinstance(vrrp_key, tuple) and len(vrrp_key) >= 2 and vrrp_key[0] == interface_name):
+            continue
+        vrrp_entry = config_db.get_entry(vrrp_table, vrrp_key)
+        vrid = str(vrrp_key[1])
+        for vip_str in get_vrrp_vip_list(vrrp_entry):
+            try:
+                vip_addr = ipaddress.ip_address(vip_str)
+            except ValueError:
+                continue
+            if vip_addr.version != ip_to_remove.version:
+                continue
+            if vip_addr not in ip_to_remove.network:
+                continue
+            if any(vip_addr in addr.network for addr in remaining_prefixes):
+                continue
+            impacted_vips.append((vrrp_table, vrid, vip_str))
+    return impacted_vips
 
 
 #
