@@ -1454,7 +1454,7 @@ class TestConfigVRRP(object):
         print(result.exit_code, result.output)
         assert result.exit_code != 0
         assert "Cannot remove IP 10.10.10.1/24 from interface Ethernet64" in result.output
-        assert "VRRP VIP 10.10.10.8 (instance 8) still falls inside this subnet" in result.output
+        assert "VRRP VIP 10.10.10.8 (VR Id: 8) still falls inside this subnet" in result.output
         assert "VRRP6" not in result.output
         assert ('Ethernet64', '10.10.10.1/24') in db.cfgdb.get_table('INTERFACE')
 
@@ -1500,7 +1500,7 @@ class TestConfigVRRP(object):
         print(result.exit_code, result.output)
         assert result.exit_code != 0
         assert "Cannot remove IP 10::8/64 from interface Ethernet64" in result.output
-        assert "VRRP6 VIP 10::1 (instance 8) still falls inside this subnet" in result.output
+        assert "VRRP6 VIP 10::1 (VR Id: 8) still falls inside this subnet" in result.output
         assert ('Ethernet64', '10::8/64') in db.cfgdb.get_table('INTERFACE')
 
         # config int vrrp6 remove Ethernet64 8
@@ -1562,7 +1562,7 @@ class TestConfigVRRP(object):
         print(result.exit_code, result.output)
         assert result.exit_code != 0
         assert "Cannot remove IP 1::1/64 from interface Ethernet64" in result.output
-        assert "VRRP6 VIP 1::10 (instance 2) still falls inside this subnet" in result.output
+        assert "VRRP6 VIP 1::10 (VR Id: 2) still falls inside this subnet" in result.output
         assert ('Ethernet64', '1::1/64') in db.cfgdb.get_table('INTERFACE')
         assert ('Ethernet64', '1.0.0.1/24') in db.cfgdb.get_table('INTERFACE')
 
@@ -1620,7 +1620,7 @@ class TestConfigVRRP(object):
                                ["Ethernet64", "10.10.10.1/24"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code != 0
-        assert "VRRP VIP 10.10.10.8 (instance 8) still falls inside this subnet" in result.output
+        assert "VRRP VIP 10.10.10.8 (VR Id: 8) still falls inside this subnet" in result.output
         assert ('Ethernet64', '10.10.10.1/24') in db.cfgdb.get_table('INTERFACE')
 
         result = runner.invoke(config.config.commands["interface"].commands["vrrp"].commands["remove"],
